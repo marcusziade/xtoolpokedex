@@ -2,10 +2,11 @@ import SwiftUI
 
 struct PokemonDetailView: View {
     let pokemonId: Int
-    @StateObject private var pokemonService = PokemonService()
+    let viewModel: PokemonViewModel
     @State private var pokemon: Pokemon?
     @State private var isLoading = true
     @State private var errorMessage: String?
+    @State private var titleOpacity: Double = 0.0
     
     var body: some View {
         Group {
@@ -34,8 +35,10 @@ struct PokemonDetailView: View {
                 }
             }
         }
-        .navigationTitle(pokemon?.name.capitalized ?? "Pokemon")
+        .navigationTitle(pokemon?.name.capitalized ?? "")
         .navigationBarTitleDisplayMode(.large)
+        .opacity(titleOpacity)
+        .animation(.easeInOut(duration: 0.5), value: titleOpacity)
         .task {
             loadPokemon()
         }
@@ -43,11 +46,24 @@ struct PokemonDetailView: View {
     
     private func loadPokemon() {
         Task {
+            // Check if Pokemon is already cached
+            if let cachedPokemon = viewModel.getPokemon(id: pokemonId) {
+                pokemon = cachedPokemon
+                isLoading = false
+                withAnimation(.easeInOut(duration: 0.5)) {
+                    titleOpacity = 1.0
+                }
+                return
+            }
+            
             isLoading = true
             errorMessage = nil
             do {
-                pokemon = try await pokemonService.fetchPokemon(id: pokemonId)
+                pokemon = try await viewModel.loadPokemon(id: pokemonId)
                 isLoading = false
+                withAnimation(.easeInOut(duration: 0.5)) {
+                    titleOpacity = 1.0
+                }
             } catch {
                 errorMessage = error.localizedDescription
                 isLoading = false
@@ -61,13 +77,13 @@ struct PokemonHeaderView: View {
     
     var body: some View {
         VStack {
-            AsyncImage(url: URL(string: pokemon.imageUrl)) { image in
+            CachedAsyncImage(url: URL(string: pokemon.imageUrl)) { image in
                 image
                     .resizable()
                     .aspectRatio(contentMode: .fit)
             } placeholder: {
-                Rectangle()
-                    .fill(Color.gray.opacity(0.3))
+                ShimmerView()
+                    .cornerRadius(12)
             }
             .frame(width: 200, height: 200)
             
